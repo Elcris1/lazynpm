@@ -1,7 +1,15 @@
 # Lazynpm
+[![Go Reference](https://pkg.go.dev/badge/github.com/Elcris1/lazynpm.svg)](https://pkg.go.dev/github.com/Elcris1/lazynpm)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Elcris1/lazynpm)](https://goreportcard.com/report/github.com/Elcris1/lazynpm)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Lazynpm is a tui interface for managing packages and scripts inside a node managed environment.
-It allows users to check which scripts exists, what do they relate to, install/uninstall dependencies, look for actual dependencies.., pending updates and executing scripts.
+A terminal user interface (TUI) for managing packages, scripts, and dependencies inside Node managed projects.
+
+[![Lazynpm in action](docs/lazynpm.png)](https://github.com/Elcris1/lazynpm)
+
+## Purpose of the project
+I wanted to learn go in order to explore my preferences in the dev world and get closer to programming languages that require the developer to take memory management into depeper consideration.    
+Even though that the utility of the tool is very limited, I wanted to explore the Go ecosystem and decided to embark in completely new adventure from what I am used to: TUI developing. 
 
 ## Dev useful commands
 
@@ -30,7 +38,7 @@ go mod download
 Building the packages
 
 ```bash
-go buid -o bin/lazynpm .cmd/lazynpm
+go buid -o bin/lazynpm ./cmd/lazynpm/
 ```
 
 Running the built in project
