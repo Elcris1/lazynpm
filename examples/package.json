@@ -1,0 +1,28 @@
+{
+  "name": "eunomia",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.1.2",
+  "engines": {
+    "node": ">=22.12.0 <24"
+  },
+  "scripts": {
+    "setup": "pnpm install && pnpm --dir apps/api install && pnpm --dir apps/web install",
+    "dev": "pnpm --dir apps/web exec ng cache clean && concurrently --kill-others-on-fail --names api,web \"pnpm --dir apps/api run dev\" \"pnpm --dir apps/web run dev\"",
+    "build": "pnpm --dir apps/api run build && pnpm --dir apps/web run build",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm --dir apps/api run typecheck && pnpm --dir apps/web run typecheck",
+    "test": "pnpm --dir apps/api run test && pnpm --dir apps/web run test:ci"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "eslint": "^9.18.0",
+    "concurrently": "^9.1.2",
+    "eslint-config-prettier": "^10.0.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.20.0"
+  }
+}
