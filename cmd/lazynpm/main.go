@@ -1,10 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
 
 	"github.com/Elcris1/lazynpm/internal/app"
 	"github.com/Elcris1/lazynpm/internal/ui"
@@ -36,6 +42,9 @@ type model struct {
 	selected       map[int]struct{}
 	selectedChoice int
 	selectedView   packageView
+	isExecuting    bool
+	logs []string
+	mu sync.RWMutex
 }
 
 func initialModel(packages []app.Package) model {
@@ -44,7 +53,80 @@ func initialModel(packages []app.Package) model {
 		selected:       make(map[int]struct{}),
 		selectedChoice: 0,
 		selectedView:   PackageSelectionView,
+		logs: make([]string, 0, 10),
 	}
+}
+
+func (m *model) executeScript() {
+	if m.isExecuting {
+		return
+	}
+	
+	m.isExecuting = true
+	go func() {
+		// Ensure isExecuting resets even if the function exits early or fails
+		defer func() {
+			m.isExecuting = false
+		}()
+
+		// 1. Create log file with proper cleanup
+		logFile, createErr := os.Create("background.log")
+		if createErr != nil {
+			return
+		}
+		defer logFile.Close() // Properly close file descriptor when goroutine finishes
+
+		// 2. Prepare background script command
+		scriptCmd := exec.Command("bash", "-c", "echo \"$(date)\" && sleep 5 && echo \"$(date)\"")
+		scriptCmd.Stdout = logFile
+		scriptCmd.Stderr = logFile
+		scriptCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+		if err := scriptCmd.Start(); err != nil {
+			return
+		}
+
+		// Clean up the script process entry when it finishes
+		go func() {
+			_ = scriptCmd.Wait()
+		}()
+
+		// 3. Prepare tail command with Context so we can kill it when done
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel() // Kills the tail process when the loop ends or breaks
+
+		tailCmd := exec.CommandContext(ctx, "tail", "-f", "background.log")
+		stdout, err := tailCmd.StdoutPipe()
+		if err != nil {
+			return
+		}
+
+		if err := tailCmd.Start(); err != nil {
+			return
+		}
+
+		// Ensure we call Wait() on tail to clean up process table entries
+		defer tailCmd.Wait()
+
+		// 4. Read stdout safely
+		scanner := bufio.NewScanner(stdout)
+		i := 0
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// NOTE: If using standard Go sync, wrap state access in a Mutex!
+			// If using Bubbletea, send a Msg through a channel or program.Send() instead.
+			m.mu.Lock()
+			m.logs = append(m.logs, line)
+			m.mu.Unlock()
+
+			i++
+			if i > 10 {
+				break // Exiting loop triggers defer cancel(), which safely kills tail -f
+			}
+		}
+	}()
+	
 }
 
 func (m model) Init() tea.Cmd {
@@ -60,6 +142,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+		case "enter":
+			m.executeScript()
 		}
 	}
 	return m, nil
@@ -145,6 +229,9 @@ func (m model) calculateAmountOptions() int {
 }
 
 func (m model) View() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	leftBox := ""
 	var leftBoxWidth int = ui.GetLeftColumnWidth()
 	var rightBoxWidth int = ui.GetRightColumnWidth()
@@ -155,9 +242,22 @@ func (m model) View() string {
 	}
 
 	rightBox := m.renderValueView(&rightBoxWidth)
+	if m.isExecuting {
+		rightBox += "\n" + ui.RenderBox("Logs", m.getLogs(), rightBoxWidth, true)
+	}
 
 	s := ui.TwoColumn(&leftBox, &rightBox) + "\nPress q to quit.\n"
 	return s
+}
+
+func (m *model) getLogs() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(m.logs) == 0 {
+        return ""
+    }
+    return strings.Join(m.logs, "\n") + "\n"
 }
 
 func (m model) renderView(view packageView, width *int) string {
